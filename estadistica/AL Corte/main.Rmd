@@ -1,0 +1,165 @@
+---
+title: "Untitled"
+author: "Esteban Sierra"
+date: "2025-09-30"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+D = read.csv('AlCorte.csv')
+```
+
+# Análisis Descriptivo
+
+Obtener el mínimo, la mediana la media y otros valores
+```{r}
+n = 5 #número de variables
+d = matrix(NA,ncol=8,nrow=n)
+for(i in 1:n){
+  d[i,]<-c(as.numeric(summary(D[,i])), sd(D[ ,i]), sd(D[ ,i])/mean(D[ ,i]))
+}
+m = as.data.frame(d)
+variables = names(D)
+row.names(m) = variables
+names(m) = c("Minimo","Q1","Mediana","Media","Q3","Máximo","Desv Est", "CV")
+round(m,2)
+```
+Obtener la correlación de las variables
+```{r}
+cor(D)
+```
+Obtener el gráfico de bigote
+```{r}
+colores = rainbow(5)
+par(mfrow=c(1,5), las=1)
+boxplot(D[1], col=colores[1], ylab=variables[1])
+boxplot(D[2], col=colores[2], ylab=variables[2])
+boxplot(D[3], col=colores[3], ylab=variables[3])
+boxplot(D[4], col=colores[4], ylab=variables[4])
+boxplot(D[5], col=colores[5], ylab=variables[5])
+
+```
+
+# Obtener mejor modelo de regresión
+
+## Criterio AIC
+```{r}
+R = lm(Resistencia ~ . , data = D)
+step(R, direction="both", trace=1)
+```
+
+## Criterio BIC
+```{r}
+n = length(D)
+R = lm(Resistencia ~ . , data = D)
+step(R, direction="both", k=log(n))
+extractAIC(R, k=log(n))
+```
+
+## Criterio HQC
+```{r}
+HQC = step(R, direction="both", k=2*log(log(n)))
+```
+## Significancia
+```{r}
+BestModel = lm(Resistencia ~ Fuerza + Potencia + Temperatura, data = D)
+summary(BestModel)
+# Economía de las variables
+#Significación global (Prueba para el modelo)
+#Significación individual (Prueba para cada 𝛽𝑖)
+#Variación explicada por el modelo
+```
+### Economía de las variables
+
+
+### Significancia global
+La significancia global en este modelo es alta ya que el p-value es menor a 0.05.
+
+### Significancia individual
+El modelo tiene una alta significancia porque 
+- Potencia: t = 7.033 y valor p casi cero
+– Temperatura: t = 3.050 y valor p = 0.00499 
+
+### Variación explicada por el modelo
+```{r}
+confint(BestModel)
+```
+
+
+# Análisis de validez del modelo encontrado
+## Análisis de residuos
+### Homocedasticidad
+### Independencia
+
+
+
+# A1 Regresión múltiple
+
+1. Haz un análisis descriptivo de los datos: medidas principales y gráficos
+2. Encuentra el mejor modelo de regresión que explique la variable Resistencia. Analiza el modelo basándote en:
+  1. Significancia del modelo:
+    1. Economía de las variables
+    2. Significación global (Prueba para el modelo)
+    3. Significación individual (Prueba para cada 𝛽𝑖)
+    4. Variación explicada por el modelo
+3. Analiza la validez del modelo encontrado:
+  1. Análisis de residuos (homocedasticidad, independencia, etc)
+  2. No multicolinealidad de Xi
+4. Emite conclusiones sobre el modelo final encontrado e interpreta en el contexto del problema el efecto de las variables predictoras en la variable respuesta
+
+# A3-Regresión Múltiple-Detección datos atípicos
+
+1. Haz un análisis descriptivo de los datos: medidas principales y gráficos (ya lo hiciste en la actividad A2)
+2. Encuentra el mejor modelo de regresión que explique la variable Resistencia (ya lo hiciste en la actividad A2) 
+3. Analiza la validez del modelo encontrado (ya lo hiciste en la actividad A2)
+4. Haz el análisis de datos atípicos e incluyentes del mejor modelo encontrado.
+
+
+## Datos atípicos o con alto leverage.
+Comenta todos los datos atípicos o con alto leverage que encuentres. Comenta por qué son influyentes o no lo son según el caso.
+
+
+Matriz sombrero:
+```{r}
+leverage = hatvalues(BestModel)
+plot(leverage, type="h", main="Valores de Apalancamiento", ylab="Apalancamiento")
+abline(h = 2*mean(leverage), col="red") # Límite comúnmente usado
+
+high_leverage_points = which(leverage > 2*mean(leverage))
+D[high_leverage_points, ]
+```
+
+Detección de datos influyentes
+```{r}
+# Distancia de cook
+#cooks.distance(BestModel)
+#I = influence.measures(BestModel)
+#summary(I)
+
+cooksdistance <- cooks.distance(BestModel)
+plot(cooksdistance, type="h", main="Distancia de Cook", ylab="Distancia de Cook")
+abline(h = 1, col="red")
+
+puntos_influyentes = which(cooksdistance > 1)
+
+D[puntos_influyentes, ]
+
+```
+
+Se detectan DfBetas mayores a |1|
+```{r}
+dfbetas_values = dfbetas(BestModel)
+#Calcula la DfBeta de los n datos para cada 𝛽𝑗
+#Gráfico auxiliar, para la variable 2:
+plot(dfbetas_values[, 2], type="h", main="DfBetas para el coeficiente 2", ylab="DfBetas")
+abline(h = c(-1, 1), col="red") # Límites comunes
+#Cuenta e identifica cuántos datos atípicos hay:
+puntos_influyentes = which(abs(dfbetas_values[, 2]) > 1)
+```
