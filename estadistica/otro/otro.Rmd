@@ -1,0 +1,254 @@
+---
+title: "A4-Proceso Poisson"
+author: "Esteban Sierra"
+date: "2025-10-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Drive Thru
+El tiempo de llegada a una ventanilla de toma de órdenes desde un automóvil de un cierto comercio de hamburguesas sigue un proceso de Poisson con un promedio de 12 llegadas por hora.
+
+$$\lambda_0 = 12$$
+
+Dos variables aleatorias:
+
+X: El número de órdenes
+T: Tiempo
+
+## A.
+
+¿Cuál será la probabilidad de que el tiempo de espera de tres personas sea a lo más de 20 minutos?
+
+*Pregunta*:
+
+t = 20min = 1/3 hrs
+$$\lambda = 4$$ clientes por 20 minutos
+
+$P(T <= 1/3)$ con 3 personas
+
+Gamma, alfa = 3, beta = 1/12
+
+```{R}
+pgamma(1/3, 3, 12) 
+```
+
+## B.
+¿Cuál es la probabilidad de que el tiempo de espera de una persona esté entre 5 y 10 segundos?
+
+P(5/3600 <= T <= 10/3600)
+
+Distribución exponencial con lambda 12
+
+```{r}
+pexp(10/3600, 12) - pexp(5/300,12)
+pgamma(10/3600, 1, 12) - pgamma(5/3600,1,12)
+```
+## C.
+¿Cuál será la probabilidad de que en 15 minutos lleguen a lo más tres personas?
+
+P(X >= 3)
+
+Distribución de Poisson con lambda = 12*1/4
+```{r}
+ppois(3, 12/4);
+```
+
+## D. 
+¿Cuál es la probabilidad de que el tiempo de espera de tres personas esté entre 5 y 10 segundos?
+
+P(1/12 <= T <= 1/6);
+
+```{r}
+pgamma(12/3600, 3, 12)
+```
+
+## E.
+Determine la media y varianza del tiempo de espera de tres personas.
+
+```{r}
+# E. Media y Varianza del tiempo de espera de tres personas (k=3, lambda=12)
+alfa <- 3
+beta <- 12
+
+# Media (en horas)
+media <- alfa / beta
+# Varianza (en horas^2)
+varianza <- alfa / beta^2
+
+# En horas: 0.25 y 0.020833
+cat("Media (horas):", media, "\n")
+cat("Varianza (horas^2):", varianza, "\n")
+```
+
+
+## F.
+¿Cuál será la probabilidad de que el tiempo de espera de tres personas exceda una desviación estándar arriba de la media?}
+```{r}
+# Desviación estándar (en horas)
+desv_std <- sqrt(varianza)
+
+# Umbral de tiempo (en horas)
+x_umbral <- media + desv_std
+
+# Probabilidad P(T > x) = 1 - P(T <= x)
+probabilidad <- 1 - pgamma(x_umbral, alfa, beta)
+
+# Resultado de la probabilidad
+# 1 - pgamma(0.3943376, 3, 12)
+cat("La probabilidad es:", probabilidad, "\n")
+```
+
+# Entre partículas
+
+Una masa radioactiva emite partículas de acuerdo con un proceso de Poisson con una razón promedio de 15 partículas por minuto. En algún punto inicia el reloj.
+
+$$\lambda_0 = 15$$
+
+## A.
+¿Cuál es la probabilidad de que en los siguientes 3 minutos la masa radioactiva emita 30 partículas?
+```{r}
+ppois(30, 15*0.05)
+```
+
+## B.
+¿Cuál es la probabilidad de que transcurran cinco segundos a lo más antes de la siguiente emisión?
+
+P(1/12 <= T <= 1/6);
+
+```{r}
+pgamma(1/3, 3, 12) 
+```
+
+## C.
+¿Cuánto es la mediana del tiempo de espera de la siguiente emisión
+```{r}
+lambda0 <- 15
+mediana_T1 <- qexp(0.5, rate = lambda0)
+# Convertir a segundos para mejor interpretación:
+mediana_T1_segundos <- mediana_T1 * 60
+
+cat("Mediana del tiempo de espera (minutos):", mediana_T1, "\n")
+cat("Mediana del tiempo de espera (segundos):", mediana_T1_segundos)
+```
+
+## D.
+¿Cuál es la probabilidad de que transcurran a lo más cinco segundos antes de la segunda emisión?
+```{r}
+k <- 2
+lambda0 <- 15
+tiempo_minutos <- 5/60  # 5 segundos = 1/12 minutos
+
+probabilidad_D <- pgamma(tiempo_minutos, shape = k, rate = lambda0)
+
+cat("Probabilidad de a lo más 5 segundos para la segunda emisión:", probabilidad_D)
+```
+
+## E.
+¿En qué rango se encuentra el 50% del tiempo central que transcurre antes de la segunda emisión?
+```{r}
+k <- 2
+lambda0 <- 15
+
+# Cuantil del 25% (Q1)
+Q1_minutos <- qgamma(0.25, shape = k, rate = lambda0)
+Q1_segundos <- Q1_minutos * 60
+
+# Cuantil del 75% (Q3)
+Q3_minutos <- qgamma(0.75, shape = k, rate = lambda0)
+Q3_segundos <- Q3_minutos * 60
+
+cat("Cuantil 25% (minutos):", Q1_minutos, "\n")
+cat("Cuantil 75% (minutos):", Q3_minutos, "\n")
+cat("Rango central (segundos): [", Q1_segundos, ",", Q3_segundos, "]")
+```
+
+# Una central telefónica
+En una central telefónica se reciben llamadas de acuerdo a un proceso Poisson con tasa de 5 llamadas por hora. Todos los días el servicio comienza a operar a las 7 AM y el operador del primer turno recibe las primeras llamadas a partir de esa hora.
+
+Tasa:
+$$\lambda = 5$$
+
+## A.
+¿Cuál es la probabilidad de que el operador reciba la primera llamada después de las 8:45 AM?
+
+$$P(T_1 > 1.75) = e^{-8.75}$$
+
+```{r}
+lambda <- 5
+t_A <- 1 + 45/60 # 1.75 horas
+prob_A <- exp(-(lambda * t_A))
+cat("Probabilidad de que la primera llamada sea después de 8:45 AM:", prob_A)
+```
+
+## B.
+Entre 8:45 y 9:15 al operador le gustaría ir a tomar un café ¿Cuál es la probabilidad de que el operador reciba una llamada entre las 8:45 y 9:15?
+
+$P(N>=1)=1-e^{-2.5}$
+
+```{r}
+lambda_B <- 5 * 0.5 # 2.5
+prob_B <- 1 - dpois(0, lambda_B)
+cat("Probabilidad de recibir al menos una llamada entre 8:45 y 9:15:", prob_B)
+```
+
+## C.
+Si el operador no ha recibido ninguna llamada desde las 8:45AM ¿cuál es la probabilidad de que la siguiente llamada ocurra antes de las 9:15 AM?
+
+```{r}
+lambda_C <- 5 * 0.5 # 2.5
+prob_C <- 1 - exp(-lambda_C)
+cat("Probabilidad de que la siguiente llamada ocurra antes de las 9:15 AM (dada la historia):", prob_C)
+```
+
+## D.
+¿Cuál es la probabilidad de que el operador esté ocioso por más de 40 minutos a partir de las 8:45?
+
+$t=\frac{40 minutos}{60minutos/hora}=\frac{2}{3}\text{horas}$
+
+```{r}
+lambda <- 5
+t_D <- 40/60 # 2/3 horas
+prob_D <- exp(-(lambda * t_D))
+cat("Probabilidad de estar ocioso por más de 40 minutos:", prob_D)
+```
+
+## E.
+¿Cuál es la probabilidad de que a las 10 AM se hayan recibido 25 llamadas en total?
+
+$\lambda_{total}=5x3=15$
+
+```{r}
+lambda_E <- 15
+k_E <- 25
+prob_E <- dpois(k_E, lambda_E)
+cat("Probabilidad de recibir exactamente 25 llamadas a las 10 AM:", prob_E)
+```
+
+## F.
+Si cada operador trabaja un turno de 8 horas, ¿cuántas llamadas se espera que reciba en promedio? ¿cuál será la varianza?
+
+```{r}
+lambda_F <- 5 * 8
+cat("Llamadas esperadas (promedio):", lambda_F, "\n")
+cat("Varianza del número de llamadas:", lambda_F)
+```
+
+## G.
+El operador estuvo muy ocupado durante las primeras 4 horas de su turno y comenta a su compañero de trabajo durante su hora de descanso: “Este será un día muy ocupado, en la mañana casi no he podido descansar” Explica si el operador tiene razones o no para argumentar tal afirmación. Para esto supón que de 8 a 12hrs, el trabajador recibió al menos 32 llamadas, ¿cuál es la probabilidad que de 1 a 5 PM reciba más de 32 llamadas? Argumenta si el trabajador tiene o no razón en suponer que la tarde también será muy ocupada.
+
+
+- Mañana (8 AM a 12 PM)
+- Tarde (1 PM a 5 PM)
+
+$P(N_2 > 32)$
+
+```{r}
+lambda_G <- 5 * 4 # 20
+prob_N2_mayor_32 <- 1 - ppois(32, lambda_G)
+
+cat("Probabilidad de recibir más de 32 llamadas por la tarde (P(N2 > 32)):", prob_N2_mayor_32, "\n")
+```
