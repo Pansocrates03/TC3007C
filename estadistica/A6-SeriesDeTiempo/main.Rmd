@@ -1,0 +1,271 @@
+---
+title: "A6-Series de tiempo"
+author: "Esteban Sierra"
+date: "2025-11-11"
+output:
+  html_document: default
+  word_document: default
+---
+
+# Análisis de tendencia y estacionalidad
+
+```{r}
+anio = c(1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4)
+trimestre = c(1,2,3,4,1,2,3,4,1,2,3,4,1,2,3,4)
+ventas = c(4.8, 4.1, 6.0, 6.5, 5.8, 5.2, 6.8, 7.4, 6.0, 5.6, 7.5, 7.8, 6.3, 5.9, 8.0, 8.4)
+
+Datos = data.frame(anio,trimestre,ventas)
+
+serie_de_tiempo_ventas <- ts(
+    data = Datos$ventas, 
+    start = c(Datos$anio[1], Datos$trimestre[1]), 
+    frequency = 4
+)
+
+print(serie_de_tiempo_ventas)
+```
+
+## Identifica si es una serie estacionaria
+La prueba de fuller cuenta con las siguienes hipótesis
+$H_0=$ La serie no es estacionaria
+$H_1=$ La serie es estacionaria
+
+```{r}
+library(tseries)
+library(ggplot2)
+
+adf_test_result <- adf.test(serie_de_tiempo_ventas)
+
+print(adf_test_result)
+
+```
+$H_0$ = La serie NO es estacionaria.
+$p$-value ($0.3$) > $\alpha$ ($0.05$).
+Cuando $p$ es alto, NO se rechaza $H_0$.
+Conclusión: No rechazamos la hipótesis de que la serie no es estacionaria. Por lo tanto, concluimos que la serie NO es estacionaria.
+
+## Grafica la serie para verificar su tendencia y estacionalidad
+```{r}
+plot(serie_de_tiempo_ventas, main="Ventas trimestrales (Objeto ts)")
+```
+## Analiza su gráfico de autocorrelación
+```{r}
+library(stats) 
+
+# Graficar la Función de Autocorrelación
+acf(serie_de_tiempo_ventas, 
+    main = "Función de Autocorrelación (ACF) de las Ventas",
+    lag.max = 8 # Muestra hasta 8 rezagos (dos años)
+)
+```
+
+## Identifica si el modelo puede ser sumativo o multiplicativo (puedes probar con ambos para ver con cuál es mejor el modelo)
+```{r}
+# Modelo sumativo
+modelo_sumativo <- decompose(serie_de_tiempo_ventas)
+cat("\nModelo sumativo\n")
+#summary(modelo_sumativo)
+print(modelo_sumativo)
+plot(modelo_sumativo)
+
+# Modelo multiplicativo
+modelo_multiplicativo <- decompose(serie_de_tiempo_ventas, type = "multiplicative")
+cat("\nModelo multiplicativo\n")
+#summary(modelo_multiplicativo)
+print(modelo_multiplicativo)
+plot(modelo_multiplicativo)
+
+
+```
+
+# Calcula los índices estacionales
+```{r}
+indices_estacionales <- head(modelo_multiplicativo$seasonal, 4)
+
+cat("Índices Estacionales (Multiplicativos):\n")
+print(indices_estacionales)
+
+```
+
+# Analiza el modelo lineal de la tendencia`
+
+## Realiza la regresión lineal de la tendencia (ventas desestacionalizadas vs tiempo)
+```{r}
+# --- ANÁLISIS DEL MODELO LINEAL DE LA TENDENCIA ---
+
+# 1. Calcular la serie desestacionalizada (Original / Estacional)
+#    Y = T * S * R  =>  Deseasonalized (T*R) = Y / S
+#    Esto tendrá NAs al inicio y al final, heredados de la tendencia.
+serie_desest_mult <- serie_de_tiempo_ventas / modelo_multiplicativo$seasonal
+
+# 2. Graficar la serie desestacionalizada
+plot(serie_desest_mult, 
+     main="Serie Desestacionalizada (Original / Estacional)",
+     ylab="Ventas Desestacionalizadas (T*R)",
+     col="blue")
+
+# 3. Preparar datos para la regresión (Manejo de NAs)
+tiempo <- 1:length(serie_desest_mult) # Vector de tiempo (1 a 16)
+ 
+# 4. Alineación de datos (ELIMINA EL ERROR)
+#    Encontramos los índices donde la serie desestacionalizada NO es NA
+indices_validos <- which(!is.na(serie_desest_mult))
+ 
+#    Creamos vectores alineados (longitud 12, en este caso)
+tiempo_alineado <- tiempo[indices_validos]
+ventas_desest_alineadas <- serie_desest_mult[indices_validos]
+ 
+# 5. Crear el dataframe para la regresión
+datos_regresion <- data.frame(
+     Tiempo = tiempo_alineado,
+     Ventas_Desest = ventas_desest_alineadas
+)
+ 
+# 6. Ajustar el modelo de tendencia lineal
+modelo_tendencia_lineal <- lm(Ventas_Desest ~ Tiempo, data = datos_regresion)
+ 
+summary(modelo_tendencia_lineal)
+
+# 7. Graficar la línea de tendencia sobre la serie desestacionalizada
+#    'abline' superpone la línea de regresión en el gráfico existente
+abline(modelo_tendencia_lineal, col="red", lwd=2)
+legend("topleft", legend="Tendencia Lineal", col="red", lwd=2, bty="n")
+```
+## Analiza la significancia del modelo lineal, global e individual
+```{r}
+#summary(modelo_multiplicativo)
+print(modelo_multiplicativo)
+
+```
+En base a los valores de estacionalidad:
+
+Qtr1: 0.9306617 Cuatrimestre bajo
+Qtr2: 0.8363763 Cuatrimestre muy bajo
+Qtr3: 1.0915441 Cuatrimestre alto
+Qtr 4: 1.1414179 Cuatrimestre muy alto 
+
+podemos confirmar que la estacionalidad es altamente significativa. Mostrándonos cómo el cuatrimetstre #4 tenemos el mayor rendimiento en un 14%, mientras que el cuatrimestre 2 es el mas bajo con un rendimiento del -16%
+
+
+## Haz el análisis de residuos (retoma el análisis de los residuos de temas anteriores)
+
+Para hacerlo usaremos la prueba de Ljung-Box. El cuál tiene:
+$$H_0: \text{Los residuos son independientes}$$
+Para tenerlo se necesita un p-value > 0.05
+```{r}
+residuos_tendencia <- residuals(modelo_tendencia_lineal)
+
+acf(residuos_tendencia, 
+    main = "ACF de los Residuos del Modelo de Tendencia")
+
+Box.test(residuos_tendencia, lag = 4, type = "Ljung-Box")
+
+# 4. Prueba de Normalidad de los Residuos
+qqnorm(residuos_tendencia)
+qqline(residuos_tendencia, col="red")
+shapiro.test(residuos_tendencia)
+```
+
+# Calcula el CME y el EPAM (al menos) de la predicción de la serie de tiempo
+
+# Exploración de otro modelo
+
+Para esta sección, se realizará la exploración del modelo cuadrático, el cuál sigue la siguiente función:
+
+$$y=\beta_0+\beta_1x+\beta_2x^2$$
+```{r}
+# 1. Añadir el término cuadrático al dataframe de regresión
+datos_regresion$Tiempo_Cuadrado <- datos_regresion$Tiempo^2
+
+# 2. Ajustar el modelo de regresión cuadrática
+modelo_tendencia_cuadratico <- lm(Ventas_Desest ~ Tiempo + Tiempo_Cuadrado, data = datos_regresion)
+
+# 3. Mostrar resultados
+summary(modelo_tendencia_cuadratico)
+
+# 4. Comparar el modelo lineal vs. el cuadrático
+#    Un p-value bajo aquí (< 0.05) significa que el modelo cuadrático
+#    es significativamente mejor que el lineal.
+anova(modelo_tendencia_lineal, modelo_tendencia_cuadratico)
+```
+
+# Concluye sobre el mejor modelo (debes haber probado al menos 3 modelos combinando: aditivo, multiplicativo, lineal, no lineal).
+
+Para elegir el mejor modelo hay que tomar en cuenta el p-value que nos da cada uno de los análisis. En el caso del cuadrático tenemos:
+4.268e-9. Esto significa que el modelo cuadrático es significativamente mejor que el resto de los modelos.
+
+# Realiza el pronóstico para el siguiente año y grafícalo junto con los pronósticos previos y los datos originales.
+
+```{r}
+tiempo_futuro <- c(17, 18, 19, 20)
+
+datos_para_predecir <- data.frame(
+    Tiempo = tiempo_futuro,
+    Tiempo_Cuadrado = tiempo_futuro^2
+)
+
+print(datos_para_predecir)
+
+## TENDENCIA DESESTACIONALIZADA
+
+prediccion_tendencia_futura <- predict(modelo_tendencia_cuadratico, newdata = datos_para_predecir)
+
+print(prediccion_tendencia_futura)
+
+# Obtener los índices multiplicativos (Q1, Q2, Q3, Q4)
+indices_estacionales <- head(modelo_multiplicativo$seasonal, 4)
+
+print(indices_estacionales)
+
+# Multiplicar la tendencia por el índice estacional
+pronostico_final <- prediccion_tendencia_futura * indices_estacionales
+
+print(pronostico_final)
+```
+Graficar los datos
+
+```{r}
+library(ggplot2)
+
+# 1. Crear un dataframe con los datos originales
+df_original <- data.frame(
+    Tiempo = 1:16,
+    Ventas = as.numeric(serie_de_tiempo_ventas),
+    Tipo = "Datos Originales"
+)
+
+# 3. Crear un dataframe con el pronóstico futuro
+df_futuro <- data.frame(
+    Tiempo = tiempo_futuro, # El tiempo futuro (4 puntos)
+    Ventas = pronostico_final,
+    Tipo = "Pronóstico Cuadrático (Futuro)"
+)
+
+# 4. Combinar todo
+df_total <- rbind(df_original, df_futuro)
+
+
+# --- C. Graficar ---
+ggplot(df_total, aes(x = Tiempo, y = Ventas, color = Tipo)) +
+  geom_line(aes(linetype = Tipo), linewidth = 1.2) +
+  geom_point(aes(shape = Tipo), size = 2.5) +
+  scale_x_continuous(breaks = 1:20) + # Mostrar cada trimestre
+  labs(
+    title = "Pronóstico de Ventas con Modelo Cuadrático Multiplicativo",
+    subtitle = "Datos Originales vs. Ajuste del Modelo y Pronóstico a 1 Año",
+    x = "Trimestre (Tiempo)",
+    y = "Ventas"
+  ) +
+  scale_color_manual(values = c(
+    "Datos Originales" = "black", 
+    "Ajuste Cuadrático (Previo)" = "blue", 
+    "Pronóstico Cuadrático (Futuro)" = "red"
+  )) +
+  scale_linetype_manual(values = c(
+    "Datos Originales" = "solid", 
+    "Ajuste Cuadrático (Previo)" = "dashed", 
+    "Pronóstico Cuadrático (Futuro)" = "dotted"
+  )) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
