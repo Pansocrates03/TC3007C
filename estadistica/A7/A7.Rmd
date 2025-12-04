@@ -1,0 +1,199 @@
+---
+title: "A7 - Series de Tiempo"
+author: "Esteban Sierra"
+date: "2025-11-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Sección 1: Preparación
+
+```{r}
+# Cargar las librerías necesarias
+library(forecast)
+library(ggplot2)
+```
+
+```{r}
+# Insertar datos
+anio = c(1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4)
+trimestre = c(1,2,3,4,1,2,3,4,1,2,3,4,1,2,3,4)
+ventas = c(4.8, 4.1, 6.0, 6.5, 5.8, 5.2, 6.8, 7.4, 6.0, 5.6, 7.5, 7.8, 6.3, 5.9, 8.0, 8.4)
+
+x = ts(ventas, frequency = 4, start = c(2016, 1))
+
+Datos = data.frame(anio,trimestre,ventas)
+
+serie_de_tiempo_ventas <- ts(
+    data = Datos$ventas, 
+    start = c(Datos$anio[1], Datos$trimestre[1]), 
+    frequency = 4
+)
+
+print(serie_de_tiempo_ventas)
+```
+
+Graficar
+```{r}
+library(ggfortify)
+library(ggplot2)
+
+autoplot(x) +
+  ggtitle("Serie trimestral de ventas") +
+  xlab("Año") + ylab("Ventas") +
+  theme_minimal()
+```
+Con mis palabras puramente y únicamente mías puedo mencionar que en este gráfico se logra ver cómo si existe algún tipo de estacionalidad a través de los años.
+
+# Sección 2: Ajuste automático del modelo ARIMA
+
+```{r}
+modelo = auto.arima(x)
+modelo
+```
+$$ARIMA(p,d,q)(P,D,Q)[s]$$
+Tomando en cuenta que es un modelo estacional, sabemos que:
+
+1. No existe autorregresivo estacional (P=0)
+2. Existe diferencia estacional(D=1)
+3. No hay diferencia estacional (Q=0)
+4. Tenemos 4 ciclos (s=4)
+
+# Sección 3: Pronóstico del siguiente año
+
+```{r}
+pred = forecast(modelo, h = 4, level = 95)
+pred
+```
+**Escribe los 4 valores pronosticados, ¿son diferentes a los valores pronosticados con tu modelo "a mano" de la clase pasada?**
+Los valores pronosticados son 6.9, 6.5, 8.6, y 9.0.
+Contra los valores anteriores: 6.7, 6.1, 8.0, y 8.4.
+Los valores son diferentes, sin embargo, ambos siguen la misma tendencia al aumentar dependiendo del cuatrimestre.
+
+**¿Qué representan las columnas Lo95 y Hi95?**
+Lo95 representa el valor mínimo que tendrá para tener un 95% de confianza.
+Hi95 representa el valor máximo que tendrá manteniendo un 95% de confianza.
+Esto significa, que tomando en cuenta los límites,los valores obtenidos por el pronostico realizado a mano entran dentro del rango y podrían ser correctos.
+
+# Serie + Ajuste + Pronóstico + IC 95%
+```{r}
+#Grafica la serie más su pronóstico más su intervalo de confianza:
+ajuste = fitted(modelo)
+
+df = data.frame(tiempo = as.numeric(time(x)), ventas = as.numeric(x), ajuste = as.numeric(ajuste))
+df_pred = data.frame(tiempo = as.numeric(time(pred$mean)), pred= as.numeric(pred$mean), lo95   = as.numeric(pred$lower[ , "95%"]), hi95   = as.numeric(pred$upper[ , "95%"]))
+ggplot() +
+  geom_line(data = df, aes(x = tiempo, y = ventas), color = "black", size = 1.1) +
+  geom_line(data = df, aes(x = tiempo, y = ajuste), color = "blue", linetype = "dashed", size = 1) +
+  geom_line(data = df_pred, aes(x = tiempo, y = pred), color = "red", size = 1.2) +
+  geom_ribbon(data = df_pred, aes(x = tiempo, ymin = lo95, ymax = hi95), fill = "orange", alpha = 0.25) +
+  labs(title = "Serie + Ajuste ARIMA + Pronóstico (IC 95%)",  x = "Año", y = "Ventas") +
+  theme_minimal()
+``` 
+
+**¿El ajuste ARIMA sigue bien los datos históricos?**
+Si. Podemos ver que el ajuste de ARIMA tiene sentido tomando en cuenta los datos históricos.
+
+**¿El pronóstico reproduce la estacionalidad que observaste en la serie original?**
+La serie original mantiene valores más bajos. Sin embargo se encontraban también dentor del rango, por lo que si lo repreoduce.
+
+**¿La banda de confianza crece o permanece estable? ¿Qué significa eso?**
+La banda de confianza crece, esto sucede ya que entre más tiempo pase, hay más factores que pueden influir y se multiplica.
+
+# Sección 5: Métricas de evaluación
+
+```{r}
+accuracy(modelo)
+```
+**¿Qué valor tiene el RMSE? ¿Es grande o pequeño en relación con la escala de la serie?**
+El RMSE tiene un valor de 0.2345341. 
+Tomando en cuenta que los valores se encuentran en *miles de ventas*, podemos decir que el valor es bajo ya que representaría menos del 4% de las ventas totales.
+
+**¿Qué métrica usarías para explicar el error a un gerente no técnico?**
+Le diría que existe una alta posibilidad de error del 4%, de esta forma el gerente entenderá que es posible que se desvíe únicamente en un 4%.
+
+# Sección 6: Diagnóstico de residuos
+```{r}
+checkresiduals(modelo)
+```
+*Residuos vs tiempo: ¿Los residuos parecen ruido blanco? Es decir, ¿se ven sin tendencia?, ¿sin estacionalidad?, ¿sin grandes picos aislados?*
+Al ver la gráfica de los residuos a través del tiempo podemos verificar que estos no tienen alguna tendencia ni estacionalidad. Sin embargo existe un pico aislado hacia abajo en el año 2018. Esto probablemente se deba  a que ese año existió una diferencia significativa entre la predicción y lo obtenido realmente.
+
+**Histograma: ¿Los residuos son aproximadamente simétricos?**
+No. Los residuos no son simétricos. Esto lo podemos ver en el histograma y los picos de este. 
+
+**ACF: ¿Algún lag sobresale más allá de las bandas azules? ¿Qué significa eso?**
+No. Ningún lag sobresale más allá de las bandas azules. Eso significa que no existe ningúna autorelación significativa. Esto significa que el modelo obtenido es ideal para nuestro sistema.
+
+**Prueba Ljung–Box. En esta prueba: H0: los residuos son ruido blanco (no hay autocorrelación). Indica con un nivel de significancia de 0.03 si el modelo explica toda la estructura.**
+```{r}
+Box.test(x, lag = 1, type = "Ljung-Box", fitdf = 0)
+```
+
+# Sección 7: Verificación de los supuestos
+
+```{r}
+library(lmtest)
+dwtest(residuals(modelo) ~ 1)
+```
+**Con un nivel de significancia de 0.03 indica si los residuos son ruido blanco**
+Si. Los residuos son ruido blanco.
+
+## Prueba formal de normalidad de los residuos
+```{r}
+# Prueba de hipotesis
+shapiro.test(residuals(modelo))
+             
+# Grafica de QQplot de los residuos estandarizados:
+qqnorm(scale(residuals(modelo)))
+qqline(scale(residuals(modelo)), col = "red")
+```
+**Con un nivel de significancia de 0.03, interpreta qué tan válidos son los intervalos de confianza calculados.**
+Los intervalos de confianza calculados son válidos.
+
+## Prueba de heterocedasticidad (Breusch–Pagan).
+```{r}
+bptest(residuals(modelo) ~ time(x))
+```
+**Con un nivel de significancia de 0.03, interpreta que tan razonable es el ARIMA obtenido**
+Tomando en cuenta que p-value (0.6283) es mucho mayor al nivel de significancia (0.03), no tenemos evidencia para rechazar la hipótesis nula (H0). Lo que significa que el modeo es razonáblemente válido.
+
+## Identificación de outliers y puntos de influencia.
+
+```{r}
+res = scale(residuals(modelo))
+which(abs(res) > 2*sd(res))
+```
+**Identifica trimestres donde el residuo es demasiado grande, puede indicar cambios estructurales o mala captura de algún patrón estacional o tendencia local.**
+El trimestre donde el residuo es demasiadogrande es el #9.
+
+
+# Sección 8: Conclusión
+
+## Identificación del modelo
+
+**Qué ARIMA/SARIMA encontraste (escribe su forma).**
+El ARIMA encontrado va subiendo en base a cuatro intérvalos, uno el segundo baja un poco, el tercero sube mucho y el cuarto sube aún más.
+
+## Comportamiento del ajuste
+Comparando el comportamiento del modelo con los datos reales, podemos ver que se ajusta casi a la perfección, viéndose diferente únicamente gracias al segundo año, teniendo una alta cantidad de residuales, sin embargo, luego esta información vuelve a la normalidad. 
+
+## Comportamiento del pronóstico.
+La banda de confianza si es razonable, esta va creciendo a medida que se aleja el pronóstico, esto se debe a que se tienen menos datos para poder pronosticarlo y dependería de otros factores. Sin embargo, el patrón estacional es muy claro y muy marcado en cuanto a la diferencia un cuatrimestre con otro.
+
+## Qué indican los residuos
+Los residuos indican que tánto falló el modelo al momento de pronosticar los datos reales. Si tenemos munchos residuos es que fallo mucho, y se puede investigar el por qué, si tenemos pocos residuos entonces podemos decir que el modelo funciona lo suficientemente.
+
+## Juicio final sobre la utilidad del modelo.
+
+**¿El modelo es adecuado?**
+Si. Después de todas las pruebas realizadas podemos decir que el modelo es muy adecuado.
+
+**¿Los pronósticos son confiables para toma de decisiones?**
+Si. Podemos decir que los pronósticos son confiables.
+
+**¿O habría que intentar un modelo más complejo?**
+No es necesario intentar un modelo más complejo, ya que este tiene todo lo necesario. 

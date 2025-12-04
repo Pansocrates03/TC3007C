@@ -1,0 +1,350 @@
+---
+title: "Actividad Integradora 1"
+author: "Esteban Sierra"
+date: "2025-11-03"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Análisis
+
+## Análisis estadístico descriptivo de las precipitaciones históricas máximas mensuales de un estado
+
+1. Descarga la base de datos de precipitaciones máximas históricas mensuales de todos los estados de la república de la siguiente liga: precipitaciones mensuales Download precipitaciones mensuales. Esta base de datos se construyó con información de los resúmenes mensuales de lluvia y temperatura de CONAGUA (https://smn.conagua.gob.mx/es/Links to an external site.). Selecciona un estado que sea diferente a los del resto de tu equipo.
+
+```{r}
+# Leer el archivo
+data = read.csv("D:/GIT/TC3007C/estadistica/Actividad-Integradora-1/precipitaciones_maximas_mensuales.txt", sep="\t")
+
+state = "Nuevo.León"
+
+# Unicamente seleccionar los valores de Guanajuato
+data = subset(data, Estado==state)
+```
+
+2. Elabora una gráfica de las precipitaciones máximas mensuales por año para tu estado. Para ello deberás calcular la precipitación mensual máxima de cada año y graficarla.
+
+
+```{r}
+# Obtenemos los datos
+years = unique(data$Anio)
+monthly_max = c()
+for (n in 1:length(years)){
+  monthly_max = c(monthly_max, max(data$Lluvia[which(data$Anio == years[n])]))}
+
+# Mostramos la gráfica
+names(monthly_max) = years
+plot(monthly_max, type="b", pch=20, ylab="Precipitación (mm)", main="Precipitación Máxima Mensual: Ags", xaxt="n", col="blue", xlab="Año")
+axis(1, at=1:30,labels=years, cex.axis=0.7, las=2)
+
+```
+3. Analiza los datos de precipitaciones máximas mensuaels del estado seleccionado.
+  1. Calcula las medidas de centralización y variación de las precipitaciones máximas mensuales
+  2. Realiza gráficos que te sirvan para describir la distribución de las lluviar máximas mensuales: histograma y boxplot
+  3. Describe el comportamiento de la distribución: centralización, sesgo, variación, ....
+  
+```{r}
+#1 Variacion de precipitaciones maximas mensuales
+rango_maxima <- max(monthly_max) - min(monthly_max)
+desviacion_estandar <- sd(monthly_max)
+media_maxima <- mean(monthly_max)
+coeficiente_variacion <- (desviacion_estandar / media_maxima) * 100
+cat("--- Resumen de Variación de Lluvias Máximas Anuales ---\n")
+cat("Rango (mm):", round(rango_maxima, 2), "\n")
+cat("Desviación Estándar (mm):", round(desviacion_estandar, 2), "\n")
+cat("Coeficiente de Variación (%):", round(coeficiente_variacion, 2), "\n")
+
+```
+
+```{r}
+library(ggplot2)
+library("dplyr")
+
+# Histograma de todas las precipitaciones mensuales
+ggplot(data, aes(x = Lluvia)) +
+  geom_histogram(binwidth = 25, fill = "skyblue", color = "black") + # Ajusta 'binwidth' según tus datos
+  labs(
+    title = "Distribución de la Precipitación Mensual",
+    x = "Lluvia Mensual (mm)",
+    y = "Frecuencia (Número de Meses)"
+  ) +
+  theme_minimal()
+
+# Boxplot de máximo de lluvias por año
+boxplot(
+  monthly_max,
+  main="Boxplot del máximo de lluvias por año",
+  xlab="Lluvia maxima"
+  )
+
+# Gráfico de caja y bigotes por mes
+ggplot(data, aes(x = factor(Mes), y = Lluvia, group = Mes)) +
+  geom_boxplot(fill = "lightgreen", color = "darkgreen") +
+  labs(
+    title = "Variabilidad Mensual de la Precipitación (Ciclo Anual)",
+    x = "Mes",
+    y = "Lluvia Mensual (mm)"
+  ) +
+  scale_x_discrete(labels = c("Ene", "Feb", "Mar", "Abr", "May", "Jun", 
+                              "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")) +
+  theme_bw()
+
+# 1. Calcular la lluvia total por año
+lluvia_total_anual <- data %>%
+  group_by(Anio) %>%
+  summarise(
+    Lluvia_Anual_Total = sum(Lluvia, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+```
+
+**4. ¿Qué puedes concluir observando la gráfica de los máximos mensuales anuales para tu Estado? ¿Observas alguna tendencia? ¿Puedes concluir que cada determinado número de años la cantidad de precipitación sube o baja? ¿Para qué nos sirve analizar este tipo de gráficas?**
+
+Después de haber realizado las gráficas anteriores, podemos observar algunas tendencias en el estado de Nuevo Leon. Por ejemplo, podemos ver que el mes en que más llueve es en Diciembre. Sin embargo, existe una mayor cantidad de varianza en los meses de Febrero. 
+
+## Análisis de Frecuencias Método Gráfico
+
+1. En el data frame de los datos de precipitación máxima se agrega una columna con los datos de lluvias máximas ordenados de mayor a menor.
+2. Se agrega una columna con el número de orden que tiene asignado cada precipitación máxima. A ese número se le llama "rank" (rango en español) y se simboliza por m
+3. Se calcula la probabilidad de excedencia o de ocurrencia de acuerdo con Weibull, donde el numerador es el número de orden
+4. Se calcula la probabilidad de no excedencia para cada precipitación (complemento de la probabilidad de excedencia)
+5. Se calcula el periodo de retorno como el inverso de la probabilidad de excedencia
+6. Describe las gráficas obtenidas. ¿Qué significa la probabilidad de excedencia? ¿Qué significa el periodo de retorno? ¿Por qué es importante en hidrología? ¿Qué valores son deseables en la probabilidad de excedencia para una precipitación de diseño de una obra? Puedes consultar el siguiente video de apoyo:
+
+```{r}
+rain_analysis = data.frame(max_rain=monthly_max, order_max_rain=sort(monthly_max, decreasing=T)) #creación del data frame con las precipitaciones máximas en orden decreciente
+rain_analysis$rank_rain = seq(1, nrow(rain_analysis)) #columna del rank (número de orden)
+rain_analysis$Pexe = rain_analysis$rank_rain/(nrow(rain_analysis)+1) #Probabilidad de excedencia: rank/(número de datos +1), P(X≥x)
+rain_analysis$Pnoexe <- 1-rain_analysis$Pexe #Probabilidad de no excedencia: 1-Pexe, P(X≤x)
+rain_analysis$Pret = 1/rain_analysis$Pexe #Periodo de retorno
+head(rain_analysis) #muestra los primeros 10 renglones del data frame
+```
+La probabilidad de excedencia permite cuantificar el riesgo asociado a cada evento de lluvia máxima
+
+El periodo de retorno es el tiempo que tendría que pasar para que un evento de cierta magnitud sea igualado o superado al menos una vez.
+La hidrología es importante porque...
+
+
+## Análisis de Frecuencias Método Analítico
+Ajuste a una Distribución Normal. Hay dos maneras de determinar si un conjunto de datos tiene una distribución normal, una visual y la otra mediante una prueba de bondad de ajuste
+
+```{r}
+# Instalar si no la tienes:
+# install.packages("MASS")
+library(MASS)
+
+# Asumiremos que tu vector de precipitaciones máximas se llama 'monthly_max'
+# (este vector es el mismo que se usó para crear la columna 'max_rain' en tu código anterior).
+
+# --- PASO OPCIONAL: RECREAR 'monthly_max' si solo tienes el dataframe 'rain_analysis' ---
+# Si solo tienes el dataframe final:
+# monthly_max <- rain_analysis$max_rain
+# -------------------------------------------------------------------------------------
+
+# Realizar el ajuste a la distribución normal
+ajuste_normal <- fitdistr(monthly_max, "normal")
+
+# Mostrar los resultados del ajuste
+print(ajuste_normal)
+```
+
+1. Contruye el histograma de la función de densidad empírica de los datos y sobrepon una distribución normal que se esperaría que tuvieran los datos con los parámetros calculados por los mismos datos.
+
+```{r}
+# 1. Extraer los parámetros
+media_ajustada <- ajuste_normal$estimate["mean"]
+sd_ajustado <- ajuste_normal$estimate["sd"]
+
+# 2. Graficar el histograma y la curva de densidad
+ggplot(data.frame(x = monthly_max), aes(x = x)) +
+  # Histograma de los datos observados
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "lightblue", color = "black") + 
+  # Curva de densidad normal ajustada
+  stat_function(
+    fun = dnorm, 
+    args = list(mean = media_ajustada, sd = sd_ajustado),
+    color = "red", 
+    linewidth = 1.2
+  ) +
+  labs(
+    title = "Ajuste de Precipitación Máxima a la Distribución Normal",
+    subtitle = paste0("Media (μ) = ", round(media_ajustada, 2), " | Desviación Estándar (σ) = ", round(sd_ajustado, 2)),
+    x = "Precipitación Máxima Mensual (mm)",
+    y = "Densidad"
+  ) +
+  theme_minimal()
+```
+*De manera visual, ¿te parece que los datos se ajustan bien a una distribución normal?*
+No. Los datos no se ajustan correctamente a una distribución normal.
+
+*Explica. ¿Cuántos parámetros tiene la distribución Normal? ¿Cuáles son?*
+Los parámetros que tiene la distribución normal son la media $\mu$ y la varianza $\sigma$
+
+*¿Por qué los parámetros se calculan de la forma en cómo se hace en el código?*
+Estos parámetros se calculan de esta forma ya que se está tomando en cuenta la distribución normal
+
+
+2. Construye la gráfica qqplot. De manera visual, ¿Los datos siguen una distribución normal de acuerdo con la Q-Qplot?
+
+```{r}
+# Gráfico Q-Q Plot
+library(car) #Si  es la primera vez que la usas tienes que instalarla: Tools/Install Packages
+qqPlot(monthly_max)
+```
+
+3. Compara las distribuciones de probabilidad acumuladas (ojiva) empíricos y teóricos de la distribución normal que se esperaría que tuvieran los datos con los parámetros calculados por los mismos datos. 
+
+```{r}
+norm_teorica = pnorm(0:300, mean=mean(monthly_max), sd=sd(monthly_max)) #Estimación de parámetros por método de momentos
+plot(ecdf(monthly_max), main="Comparación con la Distribución Normal", xlab="Precipitaciones", col="blue", xlim=c(0,300), ylim=c(0, 1.05))
+par(new=TRUE)
+plot(0:300, norm_teorica, type="l", main="", xlab="", ylab="", col="red",lwd=2, ylim=c(0, 1.05),xaxt="n", yaxt="n")
+legend("topleft", col=c("red", "blue"), legend =c("Densidad teórica","Densidad empírica"),lwd=2, bty = "n", cex=0.7)
+```
+*Explica qué son datos empíricos y datos teóricos. ¿Se parecen las distribuciones de probabilidad acumuladas?*
+En esta gráfica podemos ver que la línea roja es la densidad teórica mientras que los puntos azules es la densidad empírica. En efecto podemos darnos cuenta de que estas dos distribuciones se parecen levemente.
+Los datos teóricos son teóricos porque son obtenidos a partir de la distribución normal, y a pesar de que estos buscan simular los datos reales muchas veces esto noe s así.
+
+
+4. Utiliza dos pruebas de bondad de ajuste: Shapiro-Wilks y Kolmogorov-smirnov (KS).
+
+```{r}
+shapiro.test(monthly_max)
+```
+```{r}
+library(MASS) #Si es la primera vez que la usas, tienes que instalarla: Tools/Install Packages
+ks.test(monthly_max, "pnorm", mean=mean(monthly_max), sd=sd(monthly_max)) #usa "plnorm", "pexp", "pgamma",  "pweibull", ... para el resto de la distribuciones
+```
+
+**¿Qué información nos dan las pruebas? ¿Cuáles son los valores de los estadísticos? ¿Cuál es el p-value de las pruebas?** 
+La información que nos dan ambas pruebas son muy diferentes, mientras la de shapiro Wilk nos da un p-value de 0.02235, la de Kolmogorov-Smirnov nos da una de 0.2938. Esto significa que nos conviene hacer uso de la  segunda.
+
+**¿Se aceptan o se rechazan las hipótesis nulas? ¿Podemos concluir que los datos de las precipitaciones máximas mensuales son normales? ¿Por qué?**
+La primer hipótesis se acepta, la segunda se rechaza. No podemos concluir que los datos de lasprecipitaciones máximas mensuales son normales porque tiene una varianza demasiada alta
+
+No te olvides de las hipótesis planteadas:
+H0: Los datos provienen de una distribución normal
+H1: Los datos no provienen de una distribución normal
+
+# DISEÑO DE OBRAS HIDRÁULICAS
+
+## Precipitación de diseño de obras hidráulicas
+
+1. Haz el gráfico comparativo de la probabilidad de excedencia teórica vs empírica. ¿Qué te indica ese gráfico? interpreta y argumenta la certeza de la selección de la distribución elegida.
+
+```{r}
+library("dplyr")
+
+# Asegúrate de que los parámetros del ajuste normal estén disponibles:
+media_ajustada <- ajuste_normal$estimate["mean"]
+sd_ajustado <- ajuste_normal$estimate["sd"]
+
+# 1. Calcular la Probabilidad de Excedencia Teórica
+rain_analysis <- rain_analysis %>%
+  # Calcula la probabilidad acumulada P(X <= x)
+  mutate(P_acumulada_teorica = pnorm(
+    q = max_rain, 
+    mean = media_ajustada, 
+    sd = sd_ajustado
+  )) %>%
+  # Calcula la Probabilidad de Excedencia Teórica: 1 - P(X <= x)
+  mutate(Pexe_Teorica = 1 - P_acumulada_teorica) %>%
+  # Quitar la columna intermedia
+  dplyr::select(-P_acumulada_teorica)
+
+# Mostrar las primeras filas con el nuevo cálculo
+head(rain_analysis)
+
+# Gráfico comparativo
+ggplot(rain_analysis, aes(x = max_rain)) +
+  
+  # 1. Curva de Probabilidad Empírica (Observada)
+  geom_line(aes(y = Pexe, color = "Empírica"), 
+            linewidth = 1, linetype = "solid") +
+  geom_point(aes(y = Pexe, color = "Empírica"), size = 3) +
+  
+  # 2. Curva de Probabilidad Teórica (Ajuste Normal)
+  geom_line(aes(y = Pexe_Teorica, color = "Teórica (Normal)"), 
+            linewidth = 1, linetype = "dashed") +
+  
+  # Escala del Eje Y (Probabilidad)
+  scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
+  
+  # Títulos y Etiquetas
+  labs(
+    title = "Comparación de la Probabilidad de Excedencia",
+    subtitle = "Teórica (Ajuste Normal) vs. Empírica",
+    x = "Precipitación Máxima Mensual (mm)",
+    y = "Probabilidad de Excedencia (P(X ≥ x))",
+    color = "Probabilidad"
+  ) +
+  
+  # Leyenda y Tema
+  scale_color_manual(values = c("Empírica" = "darkblue", "Teórica (Normal)" = "red")) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+```
+Haciendo uso del gráfico de probabilidad excedida teórica contra la probabilidad empírica podemos llegar a la conclusión de que la función normal NO es una función lo suficientemente buena para poder predecir la información de la lluvia en el estado de Nuevo León
+
+2. Utilizando el límite inferior del intervalo de periodo de retorno sugerido, encuentra la probabilidad de excedencia o de ocurrencia para ese valor. Recuerda que: 
+
+Tomando en cuenta la siguiente fórmula:
+
+$P_{exe} = \frac{1}{T_{inferior}}$
+
+Para este problema específicamente vamos a tomar en cuenta un periodo de retorno de 200 años, por lo que la respuesta sería:
+
+$$\frac{1}{200} = 0.005$$
+
+3. Conociendo la probabilidad de excedencia, calcula su complemento (1 - Pexe) y utiliza esta probabilidad para encontrar el valor de la precipitación máxima mensual que tendrá ese periodo de retorno. En el código se te da un ejemplo si la distribución de probabilidad a la que mejor se ajustaron los datos fue la Gumbel y deseamos calcular el caudal máximo para un periodo de retorno de 200 años.
+
+```{r}
+# 1. Periodo de Retorno deseado
+T_retorno <- 200 # años
+
+# 2. Calcular la Probabilidad de Excedencia (Pexe)
+P_exe <- 1 / T_retorno
+
+# 3. Calcular el COMPLEMENTO: Probabilidad de No Excedencia (Pnoexe)
+# Esta es la probabilidad acumulada que usaremos en la función cuantil.
+P_noexe <- 1 - P_exe
+
+cat("Periodo de Retorno (T):", T_retorno, "años\n")
+cat("Probabilidad de Excedencia (Pexe):", P_exe, "\n")
+cat("Probabilidad de No Excedencia (Pnoexe):", P_noexe, "\n")
+```
+```{r}
+# Parámetros supuestos del ajuste Gumbel realizado previamente:
+# (Estos valores serían el resultado de una función como fitdistr o extRemes::fevd)
+param_mu <- 95.5  # Parámetro de Localización (μ)
+param_alpha <- 25.1 # Parámetro de Escala (α)
+```
+
+```{r}
+dgumbel = function(x, a, b) 1/b*exp((a-x)/b)*exp(-exp((a-x)/b))
+pgumbel = function(q, a, b) exp(-exp((a-q)/b))
+qgumbel = function(p, a, b) a-b*log(-log(p))
+                                    
+library(fitdistrplus) #si es la primera vez que lo usas, necesitas instalarlo: Tools/Install Packages, además, te pedirá instalar la biblioteca survival 
+gumbel_fit = fitdist(monthly_max, "gumbel", start = list(a=1, b=1))
+
+gumbel_fit = fitdist(monthly_max, "gumbel", start = list(a=1, b=1))
+plot(gumbel_fit)
+
+gumbel_exe = 1-pgumbel(rain_analysis$order_max_rain, gumbel_fit$estimate[1], gumbel_fit$estimate[2]) #Calculo de la probabilidad de excendencia teórica
+ks.test(rain_analysis$Pexe, gumbel_exe)
+```
+
+
+
+
+
+3. El resultado de este ejemplo será una aproximación del caudal máximo que se tendría en Nuevo Leon con un periodo de retorno de 200 años. ¿Qué significa este valor? ¿Qué pasa si incrementamos el periodo de retorno? ¿El caudal máximo para este periodo de retorno será el mismo si utilizamos datos históricos de otro estado? ¿Por qué crees que las obras hidráulicas deben diseñarse en base a periodos de retorno sugeridos? ¿Por qué es importante conocer la distribución de probabilidad a la que mejor se aproximan los datos históricos? Explora otros periodos de retorno diferentes a los que se proporcionan en los periodos sugeridos para contestar esta pregunta.
+
+El valor de la precipitación máxima calculado para un período de retorno de 200 años en Nuevo León significa que hay un riesgo anual del 0.5% de que una lluvia de esa magnitud (o mayor) ocurra, y se espera que suceda una vez cada 200 años en promedio; si se incrementa el período de retorno (ej. a 500 años), la probabilidad de ocurrencia anual disminuye, pero el caudal máximo de diseño aumenta, ya que se modela un evento más extremo. El caudal máximo no puede ser el mismo que en otro estado, pues la hidrología es específica de cada región debido a su clima y geografía, lo que obliga a la ingeniería a diseñar obras con períodos de retorno sugeridos que balancean el costo de construcción con el riesgo aceptable de falla. Es crucial conocer la distribución de probabilidad a la que mejor se ajustan los datos (como Gumbel) porque esta define con precisión la forma de la curva en los extremos, asegurando que al extrapolar a períodos largos (ej. 500 años) se eviten subestimaciones peligrosas del caudal máximo que resultarían en diseños inseguros.

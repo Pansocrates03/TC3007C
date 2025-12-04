@@ -1,0 +1,143 @@
+---
+title: "A6 Regresión Poisson"
+author: "Esteban Sierra"
+date: "2025-11-04"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Análisis Descrptivo
+
+```{r}
+data<-warpbreaks
+head(data,10)
+```
+```{r}
+summary(data)
+```
+Correlación de las variables numéricas es inecesaria ya que no tenemos ningun grupo de variables numéricas que deberían estar conectadas.
+
+
+## Histograma del número de rupturas
+
+```{r}
+library(ggplot2)
+
+ggplot(data, aes(x = breaks)) + 
+  geom_histogram(binwidth=5, fill="skyblue", color="black") +
+  labs(
+    title = "Distribución del número de rupturas",
+  ) +
+  theme_minimal()
+```
+
+## Obtén la media y la varianza de la variable dependiente
+
+```{r}
+mean(data$breaks)
+var(data$breaks)
+```
+
+## Interpreta en el contexto de una Regresión Poisson
+
+Tomando en cuenta que la varianza es mucho mayor que la media, podemos decir que esta información se encuentra altamente dispersa. 
+
+# Modelos de regresión Poisson
+
+## Ajusta el modelo de regresión Poisson sin interacción
+
+```{r}
+poisson_model=glm(breaks ~ wool + tension, data, family = poisson(link = "log"))
+
+S <- summary(poisson_model)
+S
+```
+## Ajusta el modelo de regresión Poisson con interacción
+``` {r}
+interaction_poisson_model <- glm(
+  breaks ~ wool * tension,
+  data = data, 
+  family = poisson(link = "log")
+)
+
+S1 <-summary(interaction_poisson_model)
+S1
+```
+
+## Interpretación
+El análisis de los resultados del modelo de Regresión de Poisson revela una sobredispersión extrema ($\text{Varianza} \approx 174$ vs. $\text{Media} \approx 28$), lo cual invalida los errores estándar y los valores $p$ de los modelos ajustados, haciendo que las conclusiones de significancia sean sesgadas (falsamente precisas); no obstante, el modelo sin interacción ($breaks \sim wool + tension$) sugiere que tanto el cambio de tipo de lana (de A a B, reduciendo roturas en un $19\%$) como el incremento en la tensión (de L a H, reduciendo roturas en un $40\%$) son, aparentemente, efectos altamente significativos . Al introducir la interacción (woolB:tensionM), el modelo mejora significativamente, demostrando que el efecto de la Lana B no es constante, sino que está fuertemente modulado por la Tensión Media (coeficiente $0.638$), indicando una sinergia que aumenta las roturas en esa combinación específica, aunque el modelo de interacción sigue siendo incorrecto y debe ser replicado urgentemente con la Regresión Binomial Negativa para obtener inferencias válidas.
+
+
+# Evaluación del modelo
+
+$H_0=\text{No hay sobredispersión de los residuows}$
+
+## Evaluación de sobredispersión
+
+```{r}
+# Valor frontera
+gl = S$df.residual
+qchisq(0.05,gl)
+
+# Estadístico de prueba
+dr = S$deviance
+cat("Estadístico de prueba =",dr, "\n")
+vp = 1-pchisq(dr,gl)
+cat("Valor p =",vp)
+
+```
+
+## Pseudo R cuadrado
+```{r}
+S <- summary(poisson_model)
+
+1-S$deviance/S$null.deviance
+```
+## Comparacion del AIC
+El modelo sin interacción tiene un AIC de 493, mientras que el modelo con interacción tiene un AIC de 468. Esto significa que a pesar de que el segundo es mejor, la diferencia entre uno y otro es muy poca.
+
+## Comparación de coeficientes
+```{r}
+library(ggplot2)
+ggplot(data, aes(x = tension, y = log(breaks), group = wool, color = wool)) +
+  stat_summary(fun = mean, geom = "point") +
+  stat_summary(fun = mean, geom = "line",lwd=1.1) +
+  theme_bw() +
+  theme(panel.border = element_rect(fil="transparent"))
+```
+Razón de verosimilitud
+```{r}
+S <- summary(poisson_model)
+Si <- summary(interaction_poisson_model)
+
+D = S$deviance - Si$deviance
+gl = S$df.residual - Si$df.residual
+cat("El valor crítico es", qchisq(0.05,gl), "\n")
+cat("El estadístico de prueba es", D, "\n")
+cat("El valor p es", pchisq(D, gl, lower.tail=FALSE))
+```
+
+# Definición del mejor modelo
+
+Después de este análisis podemos considerar que el segundo modelo es mejor que el primero. Esto lo podemos saber por varias razones, entre ellas el p-value, el AIC, entre otros, sin embargo es importante considerar que ninguno es  lo suficientemente bueno.
+
+## Modelo cuasi poisson
+```{r}
+library(MASS)
+poisson.model3 = glm(breaks ~ wool + tension, data = data, family = quasipoisson(link = "log"))
+summary(poisson.model3)
+```
+
+## Modelo Bionomial Negativo
+```{r}
+bnm = model.nb = glm.nb(breaks ~ wool * tension, data, control = glm.control(maxit=1000))
+summary(bnm)
+
+```
+## Define el mejor modelo usando las mismas pruebas y crtierios que usaste en los modelos Poisson
+El Modelo de Regresión Binomial Negativa con Interacción ($\text{breaks} \sim \text{wool} * \text{tension}$) se establece como el mejor modelo por su capacidad de validar la inferencia estadística y su superioridad en el ajuste. Es el único modelo que es estadísticamente válido porque corrige la sobredispersión extrema (Varianza $\approx 6.2 \times$ Media) inherente a los datos de conteo, abordando esta violación del supuesto de Poisson mediante la introducción de un parámetro de dispersión. Además de ser válido, es el modelo que mejor se ajusta a la estructura de los datos, ya que la inclusión de la interacción fue demostrada como altamente significativa mediante la Prueba de Razón de Verosimilitudes, lo que indica que el efecto sobre el número de roturas de la lana no es aditivo sino que depende fundamentalmente del nivel de tensión aplicada.
